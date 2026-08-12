@@ -1,0 +1,17 @@
+# Go
+backend/*.exe
+backend/*.test
+backend/*.out
+/bin/
+
+# Env
+.env
+.env.local
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

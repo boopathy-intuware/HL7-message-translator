@@ -1,0 +1,5 @@
+# Let Git normalize line endings for normal text files
+* text=auto
+
+# Never touch HL7 fixture files — their line endings are the actual test subject
+*.hl7 -text
