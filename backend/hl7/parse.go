@@ -56,6 +56,24 @@ func Parse(raw string) (*Message, error) {
 				return nil, err
 			}
 			msg.PID = pid
+		case "PV1":
+			pv1, err := parsePV1(segment)
+			if err != nil {
+				return nil, err
+			}
+			msg.PV1 = pv1
+		case "OBR":
+			obr, err := parseOBR(segment)
+			if err != nil {
+				return nil, err
+			}
+			msg.OBR = obr
+		case "OBX":
+			obx, err := parseOBX(segment)
+			if err != nil {
+				return nil, err
+			}
+			msg.OBX = append(msg.OBX, *obx)
 		}
 	}
 
@@ -176,5 +194,71 @@ func parsePID(segment string) (*PID, error) {
 		},
 		DOB: field(fields, 7), // PID-7
 		Sex: field(fields, 8), // PID-8
+	}, nil
+}
+
+// parsePV1 parses a PV1 segment. PV1 fields follow the generic HL7v2
+// indexing convention: PV1-N lives at split index N. Only patient class
+// (PV1-2) is required; assigned location and admit date/time are read
+// through field(), which tolerates a segment truncated before it reaches
+// them.
+func parsePV1(segment string) (*PV1, error) {
+	fields := splitFields(segment)
+
+	// PV1-2 (patient class) is the last field this parser requires, at split index 2.
+	const minFields = 3
+	if len(fields) < minFields {
+		return nil, &ParseError{Segment: "PV1", Reason: "missing required fields (need at least PV1-1 through PV1-2)"}
+	}
+
+	return &PV1{
+		PatientClass:     field(fields, 2),  // PV1-2
+		AssignedLocation: field(fields, 3),  // PV1-3
+		AdmitDateTime:    field(fields, 44), // PV1-44
+	}, nil
+}
+
+// parseOBR parses an OBR segment. OBR fields follow the generic HL7v2
+// indexing convention: OBR-N lives at split index N.
+func parseOBR(segment string) (*OBR, error) {
+	fields := splitFields(segment)
+
+	// OBR-4 (universal service ID) is the last field this parser requires, at split index 4.
+	const minFields = 5
+	if len(fields) < minFields {
+		return nil, &ParseError{Segment: "OBR", Reason: "missing required fields (need at least OBR-1 through OBR-4)"}
+	}
+
+	return &OBR{
+		SetID: field(fields, 1), // OBR-1
+		UniversalServiceID: CodedElement{
+			Code:         component(fields, 4, 0), // OBR-4.1
+			Text:         component(fields, 4, 1), // OBR-4.2
+			CodingSystem: component(fields, 4, 2), // OBR-4.3
+		},
+	}, nil
+}
+
+// parseOBX parses an OBX segment. OBX fields follow the generic HL7v2
+// indexing convention: OBX-N lives at split index N.
+func parseOBX(segment string) (*OBX, error) {
+	fields := splitFields(segment)
+
+	// OBX-5 (observation value) is the last field this parser requires, at split index 5.
+	const minFields = 6
+	if len(fields) < minFields {
+		return nil, &ParseError{Segment: "OBX", Reason: "missing required fields (need at least OBX-1 through OBX-5)"}
+	}
+
+	return &OBX{
+		SetID:     field(fields, 1), // OBX-1
+		ValueType: field(fields, 2), // OBX-2
+		ObservationID: CodedElement{
+			Code:         component(fields, 3, 0), // OBX-3.1
+			Text:         component(fields, 3, 1), // OBX-3.2
+			CodingSystem: component(fields, 3, 2), // OBX-3.3
+		},
+		Value: field(fields, 5), // OBX-5
+		Units: field(fields, 6), // OBX-6
 	}, nil
 }
