@@ -14,29 +14,66 @@ A monorepo for an HL7v2-to-FHIR message translator: ingests raw HL7v2 messages (
   - `metrics` — Prometheus collectors
   - `api` — HTTP handlers and structured request logging
   - `cmd/server` — HTTP entrypoint wiring the above together
-- `frontend/` — React + Vite + TypeScript.
+- `frontend/` — React + Vite + TypeScript. An ingestion dashboard: an inbox list (`GET /api/messages`) linking to a per-message detail view (`GET /api/messages/:id`) that shows the raw HL7 next to the generated FHIR JSON.
 - `migrations/` — `golang-migrate` SQL migrations for the Postgres schema (`messages`, `fhir_resources`).
-- `docker-compose.yml` — local Postgres 16 instance.
+- `docker-compose.yml` — the full local stack: Postgres 16, a one-shot migration runner, the Go backend, and the frontend dev server.
 
 ## Getting started
 
-### Database
+### Quickstart: everything via docker-compose
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-Starts Postgres 16 on `localhost:5432` (db `hl7_message_translator`, user/password `hl7`/`hl7`).
+Builds and starts the whole stack in one command:
 
-### Migrations
+| Service    | URL                     | Notes                                              |
+|------------|-------------------------|-----------------------------------------------------|
+| `postgres` | `localhost:5432`        | db `hl7_message_translator`, user/password `hl7`/`hl7` |
+| `migrate`  | —                       | applies `migrations/`, then exits                  |
+| `backend`  | `localhost:8080`        | waits for `migrate` to finish first                |
+| `frontend` | `localhost:5173`        | Vite dev server, live-reloads against the bind-mounted `frontend/` source |
 
-Requires the [`golang-migrate`](https://github.com/golang-migrate/migrate) CLI installed separately.
+Open `http://localhost:5173` for the inbox. Re-run `docker compose up -d --build` after changing a Dockerfile, `go.mod`, or `package.json` so the image rebuilds.
+
+### Cleanup / tearing down
+
+```bash
+docker compose down          # stop + remove containers and the network; keeps the postgres_data volume (data survives)
+docker compose down -v       # same, but also delete the postgres_data volume (wipes the database)
+docker compose down --rmi local  # also remove the images this repo built (backend/frontend), forcing a full rebuild next time
+```
+
+To "eject" back to running things manually on the host (e.g. for faster backend iteration or debugging): stop just the containerized backend/frontend and keep Postgres in Docker —
+
+```bash
+docker compose stop backend frontend
+```
+
+— then follow the **Backend** and **Frontend** sections below to run them natively against the same Postgres instance (`localhost:5432`). `docker compose up -d backend frontend` brings the containers back.
+
+### Manual setup (without docker-compose for backend/frontend)
+
+Useful for local iteration with your own toolchain instead of the containers above.
+
+#### Database
+
+```bash
+docker compose up -d postgres
+```
+
+Starts just Postgres 16 on `localhost:5432` (db `hl7_message_translator`, user/password `hl7`/`hl7`).
+
+#### Migrations
+
+Requires the [`golang-migrate`](https://github.com/golang-migrate/migrate) CLI installed separately (the `migrate` compose service above only runs inside the full-stack quickstart).
 
 ```bash
 migrate -path migrations -database "postgres://hl7:hl7@localhost:5432/hl7_message_translator?sslmode=disable" up
 ```
 
-### Backend
+#### Backend
 
 ```bash
 cd backend
@@ -61,16 +98,18 @@ Read-only, modeled loosely on FHIR's RESTful conventions — searches return a F
 - `GET /fhir/Patient?family=:name` — patients whose family name contains `:name` (case-insensitive).
 - `GET /fhir/Observation?patient=:id` — every Observation derived from a message that also derived a Patient with that id.
 
-### Frontend
+#### Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev     # proxies /api to BACKEND_URL, default http://localhost:8080
+npm run build
+npm test        # vitest component tests (MessageList, MessageDetailView)
 ```
 
 ## Status
 
-The backend ingest pipeline is functional end-to-end for ADT^A01 and ORU^R01 messages: parse → map to FHIR → persist → ACK, plus read endpoints, health/readiness, structured logging, and Prometheus metrics. Not yet built: the frontend ingestion dashboard (still the Vite starter page) and mapping support for other HL7v2 message types. See `CLAUDE.md` for more detail on architecture and conventions.
+The backend ingest pipeline is functional end-to-end for ADT^A01 and ORU^R01 messages: parse → map to FHIR → persist → ACK, plus read endpoints, health/readiness, structured logging, and Prometheus metrics. The frontend has an inbox dashboard (list + raw-vs-FHIR detail view) with component tests. Not yet built: mapping support for other HL7v2 message types, and a UI for ingesting messages (currently `POST /api/hl7/messages` only, via curl/Postman/etc.). See `CLAUDE.md` for more detail on architecture and conventions.
 
 This README will be updated as the project grows.

@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -299,5 +302,92 @@ func TestRequestLogger_CapturesIngestFields(t *testing.T) {
 	}
 	if logLine["status"] != float64(http.StatusOK) {
 		t.Errorf("log status = %v, want %v", logLine["status"], http.StatusOK)
+	}
+}
+
+// TestIngestHL7_ConcurrentIngestion_ResolvableByRawText ingests many
+// distinct messages concurrently and, for each one, resolves its message
+// ID the same way the frontend does after a redirect-worthy ingest: list
+// GET /api/messages (most-recently-received first) and walk it, fetching
+// each candidate via GET /api/messages/:id until one's raw_message
+// exactly matches what was just submitted. The ingest endpoint itself
+// never reveals the new ID, so this is the only channel available — it
+// must stay correct even when many ingests race each other, which is
+// what this test guards.
+func TestIngestHL7_ConcurrentIngestion_ResolvableByRawText(t *testing.T) {
+	r, _ := newTestRouter(t)
+
+	const n = 20
+	results := make([]struct {
+		raw        string
+		resolvedID int64
+		resolveErr error
+	}, n)
+
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+
+			raw := fmt.Sprintf(
+				"MSH|^~\\&|REG_SYS|SYNTH_HOSPITAL|ADT_SYS|SYNTH_HOSPITAL|20260812093000||ADT^A01|MSG%05d|P|2.3\r"+
+					"PID|1||PATID%05d^^^MRN||TEST^PATIENT||19850101|M\r"+
+					"PV1|1|I|WARD^101^A\r",
+				i, i,
+			)
+			results[i].raw = raw
+
+			ackRec := post(r, "/api/hl7/messages", raw)
+			if ackRec.Code != http.StatusOK {
+				results[i].resolveErr = fmt.Errorf("ingest status = %d, body: %s", ackRec.Code, ackRec.Body.String())
+				return
+			}
+
+			listRec := get(r, "/api/messages")
+			if listRec.Code != http.StatusOK {
+				results[i].resolveErr = fmt.Errorf("list status = %d", listRec.Code)
+				return
+			}
+			var summaries []store.MessageSummary
+			if err := json.Unmarshal(listRec.Body.Bytes(), &summaries); err != nil {
+				results[i].resolveErr = fmt.Errorf("decoding list: %w", err)
+				return
+			}
+
+			for _, summary := range summaries {
+				detailRec := get(r, "/api/messages/"+strconv.FormatInt(summary.ID, 10))
+				if detailRec.Code != http.StatusOK {
+					continue
+				}
+				var detail messageDetail
+				if err := json.Unmarshal(detailRec.Body.Bytes(), &detail); err != nil {
+					continue
+				}
+				if detail.RawMessage == raw {
+					results[i].resolvedID = detail.ID
+					return
+				}
+			}
+			results[i].resolveErr = fmt.Errorf("no message in the list matched the raw text this goroutine ingested")
+		}(i)
+	}
+	wg.Wait()
+
+	seen := make(map[int64]bool, n)
+	for i, res := range results {
+		if res.resolveErr != nil {
+			t.Fatalf("goroutine %d: %v", i, res.resolveErr)
+		}
+		if res.resolvedID == 0 {
+			t.Fatalf("goroutine %d: resolved to id 0", i)
+		}
+		if seen[res.resolvedID] {
+			t.Fatalf("message id %d was resolved by more than one concurrent request, want each goroutine to resolve a distinct message", res.resolvedID)
+		}
+		seen[res.resolvedID] = true
+	}
+	if len(seen) != n {
+		t.Fatalf("resolved %d distinct message ids, want %d", len(seen), n)
 	}
 }

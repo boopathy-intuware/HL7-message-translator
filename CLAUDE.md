@@ -14,8 +14,8 @@ This is a monorepo for an HL7v2-to-FHIR message translator. Current state:
   - **`backend/store`** defines the `Store` interface (`IngestMessage`, `ListMessages`, `GetMessage`, `Ping`, `GetPatientByID`, `SearchPatientsByFamilyName`, `ListObservationsForPatient`) and `PostgresStore`, its `database/sql` + `github.com/lib/pq` implementation. `IngestMessage` writes the message row and all of its FHIR resource rows inside one transaction, so a message never ends up partially persisted. The FHIR read queries all operate on `fhir_resources.resource_json` directly (Postgres `jsonb` operators: `->>'id'` for the Patient-by-id read, `jsonb_array_elements` + `ILIKE` for the family-name search) rather than adding new relational columns — `ListObservationsForPatient` in particular joins Observation and Patient resources through their shared `message_id`, not through the Observation's own embedded `subject.reference`, since a patient can be re-derived across several messages and every one of them needs to contribute its Observations. `GetPatientByID` and the search methods return the most-recently-derived match(es) first when a patient was derived from more than one message.
   - **`backend/metrics`** builds the three Prometheus collectors above via `metrics.New(prometheus.Registerer)`; callers (including tests) must pass a fresh `prometheus.NewRegistry()` rather than the global default, since re-registering the same collector names panics.
 - `migrations/` — `golang-migrate`-style migration pair `000001_init_schema.{up,down}.sql` creating `messages` (id, raw_message, message_type, received_at, parse_status, error_detail nullable) and `fhir_resources` (id, message_id fk, resource_type, resource_json jsonb, created_at) tables.
-- `frontend/` — scaffolded via `npm create vite@latest -- --template react-ts`; dependencies installed, `npm run build` verified working. Just the Vite starter page so far — no ingestion dashboard or API integration yet.
-- `docker-compose.yml` — runs a single `postgres:16` service (db `hl7_message_translator`, user/password `hl7`/`hl7`, port 5432) with a named volume and healthcheck.
+- `frontend/` — scaffolded via `npm create vite@latest -- --template react-ts`, now with an ingestion dashboard wired to the backend. `react-router-dom` provides two routes: `/` (`pages/InboxPage.tsx`) fetches `GET /api/messages` and renders `components/MessageList.tsx` — a table of type/received-time/status, each row linking to `/messages/:id`; `/messages/:id` (`pages/MessageDetailPage.tsx`) fetches `GET /api/messages/:id` and renders `components/MessageDetailView.tsx`, showing the raw HL7 (one line per segment, via `utils/hl7.ts`'s `splitHL7Segments`) side by side with the pretty-printed FHIR resources, with a prominent error banner when `parse_status` is `"failed"`. API calls go through an `axios` instance (`api/client.ts`) using relative paths; in dev, Vite's `server.proxy` (`vite.config.ts`) forwards `/api` to `BACKEND_URL` (default `http://localhost:8080`, overridden to `http://backend:8080` under docker-compose) so the browser never makes a cross-origin request and the backend needs no CORS headers. `MessageList` and `MessageDetailView` are pure presentational components (data passed in via props) with component tests under `vitest` + `@testing-library/react` (`*.test.tsx` beside each component; `src/test/setup.ts` registers jest-dom matchers and RTL's `afterEach(cleanup)`, since `vitest.config.ts` doesn't enable `test.globals`).
+- `docker-compose.yml` — runs the full local stack with one `docker compose up -d --build`: `postgres:16` (as before), a one-shot `migrate` service (official `migrate/migrate` image, applies `migrations/` against Postgres and exits before `backend` starts), `backend` (built from `backend/Dockerfile`, port 8080), and `frontend` (built from `frontend/Dockerfile`, running `vite dev --host` with the repo bind-mounted for live reload, port 5173). `backend` depends on `migrate` completing successfully; `frontend`'s `BACKEND_URL` env var points its dev-server proxy at the `backend` service by Docker DNS name.
 
 **Hard rule:** never use real patient data anywhere in this repo — code, tests, fixtures, seed data, docs. Sample HL7v2 messages must be hand-written/synthetic or from publicly available sample sources.
 
@@ -34,13 +34,13 @@ Run all commands from `backend/`:
 - Verbose test output: `go test -v ./...`
 - Tidy/verify dependencies after adding imports: `go mod tidy`
 
-### Database (docker-compose)
+### Full stack (docker-compose)
 
-Run from repo root: `docker compose up -d` starts Postgres 16 on `localhost:5432` (db `hl7_message_translator`, user/password `hl7`/`hl7`).
+Run from repo root: `docker compose up -d --build` builds and starts everything — Postgres 16 (`localhost:5432`), a one-shot `migrate` service that applies `migrations/` and exits, the Go backend (`localhost:8080`), and the Vite frontend dev server (`localhost:5173`, live-reloading against the bind-mounted `frontend/` source). Rebuild after backend/frontend dependency changes with `docker compose up -d --build` again (add `--build` whenever a Dockerfile or `go.mod`/`package.json` changed — otherwise cached image layers are reused). Tear down with `docker compose down` (add `-v` to also drop the `postgres_data` volume, i.e. wipe the database). To run just Postgres for local (non-Docker) backend/frontend dev, as before: `docker compose up -d postgres`.
 
 ### Migrations (golang-migrate)
 
-Run from repo root, pointing at the Postgres instance started by docker-compose (`migrate` CLI must be installed separately — it is not vendored in this repo):
+Applied automatically by the `migrate` service above under `docker compose up`. To run them by hand against a Postgres instance (e.g. when running `docker compose up -d postgres` only) — `migrate` CLI must be installed separately, it is not vendored in this repo:
 
 - Apply: `migrate -path migrations -database "postgres://hl7:hl7@localhost:5432/hl7_message_translator?sslmode=disable" up`
 - Roll back one step: `migrate -path migrations -database "$DATABASE_URL" down 1`
@@ -48,7 +48,7 @@ Run from repo root, pointing at the Postgres instance started by docker-compose 
 
 ### Frontend (React + Vite + TypeScript)
 
-Run from `frontend/`: `npm install`, `npm run dev`, `npm run build`.
+Run from `frontend/`: `npm install`, `npm run dev` (proxies `/api` to `BACKEND_URL`, default `http://localhost:8080`), `npm run build`, `npm test` (vitest, run once — `npx vitest` for watch mode).
 
 ## Architecture
 
