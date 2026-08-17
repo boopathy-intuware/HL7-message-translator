@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { MessageDetail } from '../api/types'
 import { MessageDetailView } from './MessageDetailView'
@@ -59,28 +58,5 @@ describe('MessageDetailView', () => {
     expect(screen.getByText('Failed')).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('hl7: missing required PV1 segment')
     expect(screen.getByText(/no fhir resources were generated/i)).toBeInTheDocument()
-  })
-
-  it('does not show a raw/formatted JSON toggle when there are no FHIR resources', () => {
-    render(<MessageDetailView message={failedMessage} />)
-
-    expect(screen.queryByRole('button', { name: /view raw json/i })).not.toBeInTheDocument()
-  })
-
-  it('toggles the FHIR pane between pretty-printed and raw JSON', async () => {
-    const user = userEvent.setup()
-    render(<MessageDetailView message={successMessage} />)
-
-    expect(screen.getByText(/"resourceType": "Patient"/)).toBeInTheDocument()
-    expect(screen.queryByText('{"resourceType":"Patient","id":"MSG001"}')).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: /view raw json/i }))
-
-    expect(screen.getByText('{"resourceType":"Patient","id":"MSG001"}')).toBeInTheDocument()
-    expect(screen.queryByText(/"resourceType": "Patient"/)).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: /view formatted json/i }))
-
-    expect(screen.getByText(/"resourceType": "Patient"/)).toBeInTheDocument()
   })
 })

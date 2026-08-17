@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { MessageDetail } from '../api/types'
 import { formatReceivedAt } from '../utils/format'
 import { splitHL7Segments } from '../utils/hl7'
@@ -9,7 +8,6 @@ interface MessageDetailViewProps {
 }
 
 export function MessageDetailView({ message }: MessageDetailViewProps) {
-  const [showRawJson, setShowRawJson] = useState(false)
   const segments = splitHL7Segments(message.raw_message)
   const isFailed = message.parse_status === 'failed'
 
@@ -39,25 +37,14 @@ export function MessageDetailView({ message }: MessageDetailViewProps) {
       </section>
 
       <section className="message-detail__section">
-        <div className="message-detail__section-header">
-          <h2>Generated FHIR</h2>
-          {message.fhir_resources.length > 0 && (
-            <button type="button" onClick={() => setShowRawJson((current) => !current)}>
-              {showRawJson ? 'View Formatted JSON' : 'View Raw JSON'}
-            </button>
-          )}
-        </div>
+        <h2>Generated FHIR</h2>
         {message.fhir_resources.length === 0 ? (
           <p className="empty-state">No FHIR resources were generated for this message.</p>
         ) : (
           message.fhir_resources.map((resource) => (
             <div key={resource.id} className="fhir-resource">
               <h3>{resource.resource_type}</h3>
-              <pre className="fhir-json">
-                {showRawJson
-                  ? JSON.stringify(resource.resource_json)
-                  : JSON.stringify(resource.resource_json, null, 2)}
-              </pre>
+              <pre className="fhir-json">{JSON.stringify(resource.resource_json, null, 2)}</pre>
             </div>
           ))
         )}

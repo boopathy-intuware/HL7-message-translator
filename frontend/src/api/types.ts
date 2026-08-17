@@ -28,3 +28,14 @@ export interface MessageDetail {
   error_detail?: string
   fhir_resources: FHIRResource[]
 }
+
+// The minimal FHIR searchset Bundle shape returned by GET /fhir/Patient
+// and GET /fhir/Observation — see newSearchBundle in fhir_handlers.go.
+// Resource contents stay unknown, same as FHIRResource.resource_json
+// above: nothing needs field-level access, just enough shape to iterate.
+export interface Bundle<T = unknown> {
+  resourceType: 'Bundle'
+  type: 'searchset'
+  total: number
+  entry: { resource: T }[]
+}

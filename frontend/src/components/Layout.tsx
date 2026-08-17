@@ -15,6 +15,9 @@ export function Layout() {
         <NavLink to="/inbox" className={navLinkClassName}>
           Inbox
         </NavLink>
+        <NavLink to="/fhir" className={navLinkClassName}>
+          FHIR Search
+        </NavLink>
       </nav>
       <main className="app-main">
         <Outlet />

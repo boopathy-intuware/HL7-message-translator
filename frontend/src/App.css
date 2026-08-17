@@ -109,7 +109,7 @@ h1 {
 }
 
 .converter-form button,
-.message-detail__section-header button {
+.fhir-form button {
   align-self: flex-start;
   font-size: 14px;
   font-weight: 500;
@@ -122,13 +122,53 @@ h1 {
 }
 
 .converter-form button:hover,
-.message-detail__section-header button:hover {
+.fhir-form button:hover {
   background: var(--accent-border);
 }
 
-.converter-form button:disabled {
+.converter-form button:disabled,
+.fhir-form button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+/* FHIR explorer */
+
+.fhir-section {
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fhir-section:last-child {
+  border-bottom: none;
+}
+
+.fhir-section h2 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+
+.fhir-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  max-width: 640px;
+}
+
+.fhir-form input,
+.fhir-form select {
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+.fhir-form input {
+  flex: 1 1 auto;
 }
 
 /* Inbox list */
@@ -222,18 +262,6 @@ h1 {
   font-size: 16px;
 }
 
-.message-detail__section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 4px;
-}
-
-.message-detail__section-header h2 {
-  margin: 0;
-}
-
 .hl7-raw,
 .fhir-json {
   background: var(--code-bg);
@@ -241,6 +269,7 @@ h1 {
   padding: 12px;
   font-family: var(--mono);
   font-size: 13px;
+  text-align: left;
   overflow-x: auto;
   white-space: pre;
   margin: 0 0 12px;
