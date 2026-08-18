@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getMessage } from '../api/messages'
 import type { MessageDetail } from '../api/types'
+import { AlertCircleIcon, ArrowLeftIcon } from '../components/icons'
 import { MessageDetailView } from '../components/MessageDetailView'
 
 export function MessageDetailPage() {
@@ -29,10 +30,12 @@ export function MessageDetailPage() {
   return (
     <div className="page">
       <Link to="/inbox" className="back-link">
-        ← Back to inbox
+        <ArrowLeftIcon size={16} />
+        Back to inbox
       </Link>
       {error && (
         <p className="error-banner" role="alert">
+          <AlertCircleIcon size={16} />
           {error}
         </p>
       )}

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { findIngestedMessageId, ingestMessage } from '../api/messages'
+import { AlertCircleIcon, SendIcon } from '../components/icons'
 
 const PLACEHOLDER = 'MSH|^~\\&|SENDING_APP|SENDING_FAC|RECEIVING_APP|RECEIVING_FAC|20260817120000||ADT^A01|MSG00001|P|2.3\nPID|1||PATID001||DOE^JANE||19800101|F\nPV1|1|I|WARD1^101^A'
 
@@ -50,10 +51,12 @@ export function ConverterPage() {
         />
         {error && (
           <p className="error-banner" role="alert">
+            <AlertCircleIcon size={16} />
             {error}
           </p>
         )}
         <button type="submit" disabled={submitting || !raw.trim()}>
+          <SendIcon size={15} />
           {submitting ? 'Ingesting…' : 'Ingest Message'}
         </button>
       </form>

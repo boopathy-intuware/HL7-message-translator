@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { getPatientById, listObservationsForPatient, searchPatientsByFamily } from '../api/fhir'
 import type { Bundle } from '../api/types'
+import { AlertCircleIcon, SearchIcon } from '../components/icons'
 
 type SearchMode = 'patient-by-id' | 'patient-by-family' | 'observations-by-patient'
 
@@ -59,7 +60,7 @@ export function FhirExplorerPage() {
           setResult({
             kind: 'bundle',
             bundle,
-            emptyMessage: `No observations found for patient "${q}" (or the patient doesn't exist — this endpoint can't tell the two apart).`,
+            emptyMessage: `No observations found for patient "${q}" (or the patient doesn't exist).`,
           })
           break
         }
@@ -97,12 +98,14 @@ export function FhirExplorerPage() {
             aria-label="Search query"
           />
           <button type="submit" disabled={loading || !query.trim()}>
+            <SearchIcon size={15} />
             {loading ? 'Searching…' : 'Search'}
           </button>
         </form>
 
         {error && (
           <p className="error-banner" role="alert">
+            <AlertCircleIcon size={16} />
             {error}
           </p>
         )}

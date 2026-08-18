@@ -1,6 +1,7 @@
 import type { MessageDetail } from '../api/types'
 import { formatReceivedAt } from '../utils/format'
 import { splitHL7Segments } from '../utils/hl7'
+import { AlertCircleIcon, BraceIcon, FileTextIcon } from './icons'
 import { StatusBadge } from './StatusBadge'
 
 interface MessageDetailViewProps {
@@ -21,12 +22,18 @@ export function MessageDetailView({ message }: MessageDetailViewProps) {
 
       {isFailed && message.error_detail && (
         <div className="message-detail__error" role="alert">
-          <strong>Parse error:</strong> {message.error_detail}
+          <AlertCircleIcon size={16} />
+          <span>
+            <strong>Parse error:</strong> {message.error_detail}
+          </span>
         </div>
       )}
 
       <section className="message-detail__section">
-        <h2>Raw HL7v2</h2>
+        <h2>
+          <FileTextIcon size={16} />
+          Raw HL7v2
+        </h2>
         <pre className="hl7-raw">
           {segments.map((segment, index) => (
             <div key={index} className="hl7-raw__line">
@@ -37,7 +44,10 @@ export function MessageDetailView({ message }: MessageDetailViewProps) {
       </section>
 
       <section className="message-detail__section">
-        <h2>Generated FHIR</h2>
+        <h2>
+          <BraceIcon size={16} />
+          Generated FHIR
+        </h2>
         {message.fhir_resources.length === 0 ? (
           <p className="empty-state">No FHIR resources were generated for this message.</p>
         ) : (

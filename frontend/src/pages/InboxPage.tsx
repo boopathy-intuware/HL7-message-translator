@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { listMessages } from '../api/messages'
 import type { MessageSummary } from '../api/types'
+import { AlertCircleIcon } from '../components/icons'
 import { MessageList } from '../components/MessageList'
 
 export function InboxPage() {
@@ -26,6 +27,7 @@ export function InboxPage() {
       <h1>Inbox</h1>
       {error && (
         <p className="error-banner" role="alert">
+          <AlertCircleIcon size={16} />
           {error}
         </p>
       )}
