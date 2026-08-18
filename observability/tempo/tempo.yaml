@@ -1,0 +1,23 @@
+# Trace retention is set via the -backend-scheduler.provider.work.compaction.block-retention
+# CLI flag on the tempo service in docker-compose.yml, not here — Tempo v3
+# replaced the old ingester/compactor blocks with backend_scheduler/backend_worker
+# modules, and that section's YAML key nesting doesn't mirror its own flag names.
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal

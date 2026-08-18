@@ -12,14 +12,25 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"hl7-message-translator/backend/api"
 	"hl7-message-translator/backend/metrics"
 	"hl7-message-translator/backend/store"
+	"hl7-message-translator/backend/telemetry"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slogHandler, shutdownTelemetry, err := telemetry.Setup(context.Background(), "hl7-backend")
+	if err != nil {
+		log.Fatalf("setting up telemetry: %v", err)
+	}
+	defer func() {
+		if err := shutdownTelemetry(context.Background()); err != nil {
+			log.Printf("shutting down telemetry: %v", err)
+		}
+	}()
+	logger := slog.New(slogHandler)
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
@@ -43,6 +54,8 @@ func main() {
 
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
+	r.Use(otelhttp.NewMiddleware("http.server"))
+	r.Use(api.RouteTagger)
 	r.Use(api.RequestLogger(logger))
 
 	handler.Routes(r)

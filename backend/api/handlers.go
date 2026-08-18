@@ -13,6 +13,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 
 	"hl7-message-translator/backend/ack"
 	"hl7-message-translator/backend/hl7"
@@ -20,6 +23,13 @@ import (
 	"hl7-message-translator/backend/metrics"
 	"hl7-message-translator/backend/store"
 )
+
+// tracer creates the child spans IngestHL7 uses to break down a request's
+// hl7_processing_duration_seconds into its parse/map/persist stages. It
+// resolves against whatever TracerProvider is globally registered (a
+// no-op unless telemetry.Setup installed a real one), so handler tests
+// that don't wire up telemetry still work unchanged.
+var tracer = otel.Tracer("hl7-message-translator/backend/api")
 
 // Handler wires the HTTP layer to the persistence and metrics layers.
 type Handler struct {
@@ -64,14 +74,26 @@ func (h *Handler) IngestHL7(w http.ResponseWriter, r *http.Request) {
 	}
 	raw := string(body)
 
+	_, parseSpan := tracer.Start(ctx, "hl7.parse")
 	msg, parseErr := hl7.Parse(raw)
+	if parseErr != nil {
+		parseSpan.RecordError(parseErr)
+		parseSpan.SetStatus(codes.Error, parseErr.Error())
+	}
+	parseSpan.End()
 
 	var (
 		resources  []namedResource
 		mappingErr error
 	)
 	if parseErr == nil {
+		_, mapSpan := tracer.Start(ctx, "fhir.map")
 		resources, mappingErr = mapToFHIR(msg)
+		if mappingErr != nil {
+			mapSpan.RecordError(mappingErr)
+			mapSpan.SetStatus(codes.Error, mappingErr.Error())
+		}
+		mapSpan.End()
 	}
 
 	messageType := messageTypeLabel(msg)
@@ -93,16 +115,23 @@ func (h *Handler) IngestHL7(w http.ResponseWriter, r *http.Request) {
 		newResources[i] = store.NewFHIRResource{ResourceType: res.resourceType, ResourceJSON: res.json}
 	}
 
-	if _, err := h.Store.IngestMessage(ctx, store.NewMessage{
+	persistCtx, persistSpan := tracer.Start(ctx, "store.ingest_message")
+	persistSpan.SetAttributes(attribute.String("message_type", messageType))
+	_, err = h.Store.IngestMessage(persistCtx, store.NewMessage{
 		RawMessage:  raw,
 		MessageType: messageType,
 		ParseStatus: parseStatus,
 		ErrorDetail: errorDetail,
-	}, newResources); err != nil {
-		h.Logger.Error("failed to persist ingested message", "error", err)
+	}, newResources)
+	if err != nil {
+		persistSpan.RecordError(err)
+		persistSpan.SetStatus(codes.Error, err.Error())
+		persistSpan.End()
+		h.Logger.ErrorContext(ctx, "failed to persist ingested message", "error", err)
 		http.Error(w, "failed to store message", http.StatusInternalServerError)
 		return
 	}
+	persistSpan.End()
 
 	h.Metrics.MessagesIngested.WithLabelValues(messageType).Inc()
 	if parseStatus == store.ParseStatusFailed {
@@ -121,7 +150,7 @@ func (h *Handler) IngestHL7(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	messages, err := h.Store.ListMessages(r.Context())
 	if err != nil {
-		h.Logger.Error("failed to list messages", "error", err)
+		h.Logger.ErrorContext(r.Context(), "failed to list messages", "error", err)
 		http.Error(w, "failed to list messages", http.StatusInternalServerError)
 		return
 	}
@@ -151,7 +180,7 @@ func (h *Handler) GetMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		h.Logger.Error("failed to get message", "error", err, "id", id)
+		h.Logger.ErrorContext(r.Context(), "failed to get message", "error", err, "id", id)
 		http.Error(w, "failed to get message", http.StatusInternalServerError)
 		return
 	}

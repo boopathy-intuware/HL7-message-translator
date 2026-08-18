@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: hl7-dashboards
+    orgId: 1
+    folder: HL7 Message Translator
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

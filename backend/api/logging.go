@@ -56,7 +56,7 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			if fields.parseStatus != "" {
 				attrs = append(attrs, "parse_status", fields.parseStatus)
 			}
-			logger.Info("http_request", attrs...)
+			logger.InfoContext(ctx, r.Method, attrs...)
 		})
 	}
 }

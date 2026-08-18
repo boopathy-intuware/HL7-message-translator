@@ -22,7 +22,7 @@ func (h *Handler) GetPatient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		h.Logger.Error("failed to get patient", "error", err, "id", id)
+		h.Logger.ErrorContext(r.Context(), "failed to get patient", "error", err, "id", id)
 		http.Error(w, "failed to get patient", http.StatusInternalServerError)
 		return
 	}
@@ -44,7 +44,7 @@ func (h *Handler) SearchPatients(w http.ResponseWriter, r *http.Request) {
 
 	resources, err := h.Store.SearchPatientsByFamilyName(r.Context(), family)
 	if err != nil {
-		h.Logger.Error("failed to search patients", "error", err, "family", family)
+		h.Logger.ErrorContext(r.Context(), "failed to search patients", "error", err, "family", family)
 		http.Error(w, "failed to search patients", http.StatusInternalServerError)
 		return
 	}
@@ -67,7 +67,7 @@ func (h *Handler) ListObservations(w http.ResponseWriter, r *http.Request) {
 
 	resources, err := h.Store.ListObservationsForPatient(r.Context(), patientID)
 	if err != nil {
-		h.Logger.Error("failed to list observations", "error", err, "patient", patientID)
+		h.Logger.ErrorContext(r.Context(), "failed to list observations", "error", err, "patient", patientID)
 		http.Error(w, "failed to list observations", http.StatusInternalServerError)
 		return
 	}
